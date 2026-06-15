@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-game-red: #ef4444;
+  --color-game-blue: #3b82f6;
+  --color-game-green: #10b981;
+  --color-game-yellow: #f59e0b;
+  --color-game-purple: #8b5cf6;
+  --color-game-orange: #f97316;
+  --color-game-pink: #ec4899;
+  --color-game-teal: #14b8a6;
+  --color-primary: #1f2937;
+  --color-secondary: #6b7280;
+  --color-accent: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+}
+
+/* Accessibility improvements */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Focus styles for better keyboard navigation */
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .border-gray-300 {
+    border-color: #000000;
+  }
+  
+  .border-gray-400 {
+    border-color: #000000;
+  }
+  
+  .text-gray-600 {
+    color: #000000;
+  }
+  
+  .bg-gray-50 {
+    background-color: #ffffff;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-in,
+  .transition-all,
+  .duration-200,
+  .duration-300,
+  .duration-500 {
+    animation: none;
+    transition: none;
+  }
+}
