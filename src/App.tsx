@@ -6,11 +6,14 @@ import LeaderboardScreen from './screens/LeaderboardScreen/LeaderboardScreen';
 import GameScreen from './screens/GameScreen/GameScreen';
 import GameListScreen from './screens/GameListScreen/GameListScreen';
 import '@aws-amplify/ui-react/styles.css';
+import { Authenticator } from '@aws-amplify/ui-react';
 
 function App() {
   const baseURL = import.meta.env.MODE === 'production' ? '/' : `/ports/8081${import.meta.env.BASE_URL}`;
 
   return (
+    <Authenticator>
+      <Authenticator.Provider>
         <GameProvider>
           <Router basename={baseURL}>
             <div className="min-h-screen bg-gray-50">
@@ -26,6 +29,8 @@ function App() {
             </div>
           </Router>
         </GameProvider>
+      </Authenticator.Provider>
+   </Authenticator>
   );
 }
 
