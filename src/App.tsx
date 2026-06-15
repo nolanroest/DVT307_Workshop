@@ -7,6 +7,15 @@ import GameScreen from './screens/GameScreen/GameScreen';
 import GameListScreen from './screens/GameListScreen/GameListScreen';
 import '@aws-amplify/ui-react/styles.css';
 import { Authenticator } from '@aws-amplify/ui-react';
+import { Amplify } from 'aws-amplify';
+import { parseAmplifyConfig } from "aws-amplify/utils";
+import outputs from '../amplify_outputs.json';
+
+const amplifyConfig = parseAmplifyConfig(outputs);
+
+Amplify.configure({
+  ...amplifyConfig,
+});
 
 function App() {
   const baseURL = import.meta.env.MODE === 'production' ? '/' : `/ports/8081${import.meta.env.BASE_URL}`;
