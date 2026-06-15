@@ -58,8 +58,9 @@ export function useGameActions() {
    * Uses AppSync Events if API is enabled, otherwise local evaluation
    */
   const submitGuess = useCallback(async () => {
+    
     dispatch({ type: 'SUBMIT_GUESS' });
-  }, [dispatch, state.gameId, state.currentGuess]);
+  }, [dispatch, state.gameId]);
 
   /**
    * Adds a color to the current slot and automatically submits if the guess is complete

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Container, Heading, Text } from '../../components/common';
 import type { GameListItem as GameListItemType, Difficulty } from '../../types';
+import { ApiProvider } from '../../utils/api';
 import { GameListItem, GameFilter, EmptyGameState } from '../../components/GameList';
 
 const GameListScreen: React.FC = () => {
@@ -16,7 +17,8 @@ const GameListScreen: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      setGames([]);
+      const data = await ApiProvider.getGames(difficulty);
+      setGames(data.games);
     } catch (error) {
       console.error('Error fetching games:', error);
       setError('Failed to load games. Please try again.');

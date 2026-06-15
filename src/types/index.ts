@@ -85,12 +85,21 @@ export interface DifficultyStats {
 
 // Leaderboard interfaces
 export interface LeaderboardEntry {
-  id: string;
-  username: string;
+  userId: string;
   difficulty: Difficulty;
-  attempts: number;
-  timeInSeconds: number;
-  completedAt: Date;
+  gamesWon: number;
+  totalGames: number;
+  bestScore: number;
+  averageScore: number;
+  lastWonAt: string;
+  username?: string;
+}
+
+// API leaderboard response
+export interface LeaderboardResponse {
+  items: any[];
+  count: number;
+  lastEvaluatedKey?: string;
 }
 
 // Game listing interfaces
@@ -101,4 +110,10 @@ export interface GameListItem {
   createdAt: string;
   updatedAt?: string;
   totalGuesses?: number;
+}
+
+export interface GameListResponse {
+  games: GameListItem[];
+  count: number;
+  lastEvaluatedKey?: string;
 }

@@ -7,6 +7,7 @@ import { updateLeaderboard } from './functions/update-leaderboard/resource';
 import { DynamoDBConstruct } from './custom/dynamodb/resource';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { RestApiConstruct } from './custom/rest-api/resource';
 
 const environment = `${process.env.AWS_BRANCH}-${process.env.ENVIRONMENT}` || 'dev'
 
@@ -47,3 +48,27 @@ backend.updateLeaderboard.resources.lambda.addEventSource(
     retryAttempts: 3
   })
 );
+
+// Define REST API construct
+const restApiConstruct = new RestApiConstruct(sharedStack, `MastermindRestApi-${environment}`, {
+  environment: environment.replace(/-/g, ''),
+  gameManagementFunction: backend.gameManagement.resources.lambda,
+  getLeaderboardFunction: backend.getLeaderboard.resources.lambda,
+  userPool: backend.auth.resources.userPool,
+  gameStateTable: ddbConstruct.gamesTable,
+  leaderboardTable: ddbConstruct.leaderboardTable
+});
+
+// add outputs to the configuration file
+backend.addOutput({
+  custom: {
+    environment: environment.replace(/-/g, ''),
+    API: {
+      [restApiConstruct.restApi.restApiName]: {
+        endpoint: restApiConstruct.restApi.url,
+        region: backend.stack.region,
+        apiName: restApiConstruct.restApi.restApiName,
+      },
+    },
+  },
+});

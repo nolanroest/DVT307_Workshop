@@ -19,8 +19,8 @@ const EntryScreen: React.FC = () => {
 
   const handleStartGame = async (difficulty: Difficulty) => {
     try {
-      const gameId = await startGame(difficulty);
-      navigate(`/game/${gameId}`);
+      const response = await startGame(difficulty);
+      navigate(`/game/${response.gameId}`);
     } catch (error) {
       console.error('Failed to start game:', error);
     }

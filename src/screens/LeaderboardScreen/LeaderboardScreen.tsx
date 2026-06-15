@@ -1,80 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Container } from '../../components/common';
 import { Heading, Text } from '../../components/common';
 import type { LeaderboardEntry, Difficulty } from '../../types';
-
-// Dummy leaderboard data
-const dummyLeaderboardData: LeaderboardEntry[] = [
-  {
-    id: '1',
-    username: 'CodeMaster',
-    difficulty: 'hard',
-    attempts: 3,
-    timeInSeconds: 145,
-    completedAt: new Date('2024-01-15T10:30:00')
-  },
-  {
-    id: '2',
-    username: 'PuzzleWiz',
-    difficulty: 'medium',
-    attempts: 2,
-    timeInSeconds: 89,
-    completedAt: new Date('2024-01-14T15:45:00')
-  },
-  {
-    id: '3',
-    username: 'ColorCracker',
-    difficulty: 'hard',
-    attempts: 4,
-    timeInSeconds: 203,
-    completedAt: new Date('2024-01-13T09:15:00')
-  },
-  {
-    id: '4',
-    username: 'LogicLord',
-    difficulty: 'easy',
-    attempts: 1,
-    timeInSeconds: 34,
-    completedAt: new Date('2024-01-12T14:20:00')
-  },
-  {
-    id: '5',
-    username: 'MindBender',
-    difficulty: 'medium',
-    attempts: 3,
-    timeInSeconds: 156,
-    completedAt: new Date('2024-01-11T11:30:00')
-  },
-  {
-    id: '6',
-    username: 'PatternPro',
-    difficulty: 'hard',
-    attempts: 5,
-    timeInSeconds: 287,
-    completedAt: new Date('2024-01-10T16:45:00')
-  },
-  {
-    id: '7',
-    username: 'QuickSolver',
-    difficulty: 'easy',
-    attempts: 2,
-    timeInSeconds: 67,
-    completedAt: new Date('2024-01-09T13:10:00')
-  },
-  {
-    id: '8',
-    username: 'BrainBox',
-    difficulty: 'medium',
-    attempts: 4,
-    timeInSeconds: 198,
-    completedAt: new Date('2024-01-08T12:00:00')
-  }
-];
+import { ApiProvider } from '../../utils/api';
 
 const LeaderboardScreen: React.FC = () => {
   const navigate = useNavigate();
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'all'>('all');
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
+  const [sortFilerData, setSortFilterData] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch leaderboard data
+  const fetchLeaderboard = async (difficulty?: Difficulty) => {
+    try {
+      setLoading(true);
+      const data = await ApiProvider.getLeaderboard(difficulty);
+      setLeaderboardData(data);
+    } catch (error) {
+      console.error('Error fetching leaderboard:', error);
+      setLeaderboardData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial data fetch
+  useEffect(() => {
+    const difficulty = selectedDifficulty === 'all' ? undefined : selectedDifficulty;
+    fetchLeaderboard(difficulty);
+  }, [selectedDifficulty]);
+
+  useEffect(() => {
+    const filteredData = selectedDifficulty === 'all'
+      ? leaderboardData
+      : leaderboardData.filter(entry => entry.difficulty === selectedDifficulty);
+
+    const sortedData = filteredData.sort((a, b) => {
+      // Sort by best score ascending (lowest first), then by games won descending (highest first)
+      if (a.bestScore !== b.bestScore) {
+        return a.bestScore - b.bestScore;
+      }
+      return b.gamesWon - a.gamesWon;
+    });
+
+    setSortFilterData(sortedData);
+  }, [leaderboardData]);
 
   const handleBackToMenu = () => {
     navigate('/');
@@ -82,12 +54,6 @@ const LeaderboardScreen: React.FC = () => {
 
   const handleStartGame = () => {
     navigate('/');
-  };
-
-  const formatTime = (seconds: number): string => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
   const getDifficultyColor = (difficulty: Difficulty): string => {
@@ -102,18 +68,6 @@ const LeaderboardScreen: React.FC = () => {
         return 'text-gray-600 bg-gray-100';
     }
   };
-
-  const filteredData = selectedDifficulty === 'all'
-    ? dummyLeaderboardData
-    : dummyLeaderboardData.filter((entry: LeaderboardEntry) => entry.difficulty === selectedDifficulty);
-
-  const sortedData = filteredData.sort((a, b) => {
-    // Sort by best score ascending (lowest first), then by games won descending (highest first)
-    if (a.bestScore !== b.bestScore) {
-      return a.bestScore - b.bestScore;
-    }
-    return b.gamesWon - a.gamesWon;
-  });
 
   return (
     <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8 pt-20">
@@ -160,74 +114,93 @@ const LeaderboardScreen: React.FC = () => {
           </Button>
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">⏳</div>
+            <Text variant="body" color="secondary">
+              Loading leaderboard...
+            </Text>
+          </div>
+        )}
+
         {/* Leaderboard Table */}
-        <div className="overflow-x-auto mb-8">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b-2 border-gray-200">
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Rank</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Player</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Difficulty</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Attempts</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Time</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedData.map((entry, index) => (
-                <tr
-                  key={entry.id}
-                  className={`border-b border-gray-100 hover:bg-gray-50 ${index < 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
-                    }`}
-                >
-                  <td className="py-4 px-4">
-                    <div className="flex items-center">
-                      {index === 0 && <span className="text-2xl mr-2">🥇</span>}
-                      {index === 1 && <span className="text-2xl mr-2">🥈</span>}
-                      {index === 2 && <span className="text-2xl mr-2">🥉</span>}
-                      <span className="font-semibold text-gray-700">#{index + 1}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Text variant="body" className="font-medium">
-                      {entry.username}
-                    </Text>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getDifficultyColor(entry.difficulty)}`}>
-                      {entry.difficulty}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Text variant="body" className="font-medium">
-                      {entry.attempts}
-                    </Text>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Text variant="body" className="font-mono">
-                      {formatTime(entry.timeInSeconds)}
-                    </Text>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Text variant="small" color="secondary">
-                      {entry.completedAt.toLocaleDateString()}
-                    </Text>
-                  </td>
+        {!loading && sortFilerData.length > 0 && (
+          <div className="overflow-x-auto mb-8">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Rank</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Player</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Difficulty</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Best Score</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Games Won</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Avg Score</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">Last Won</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {sortFilerData.map((entry, index) => (
+                  <tr 
+                    key={`${entry.userId}-${entry.difficulty}`} 
+                    className={`border-b border-gray-100 hover:bg-gray-50 ${
+                      index < 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
+                    }`}
+                  >
+                    <td className="py-4 px-4">
+                      <div className="flex items-center">
+                        {index === 0 && <span className="text-2xl mr-2">🥇</span>}
+                        {index === 1 && <span className="text-2xl mr-2">🥈</span>}
+                        {index === 2 && <span className="text-2xl mr-2">🥉</span>}
+                        <span className="font-semibold text-gray-700">#{index + 1}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Text variant="body" className="font-medium">
+                        {entry.username || `Player ${entry.userId.slice(-4)}`}
+                      </Text>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${getDifficultyColor(entry.difficulty)}`}>
+                        {entry.difficulty}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Text variant="body" className="font-medium">
+                        {entry.bestScore}
+                      </Text>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Text variant="body" className="font-medium">
+                        {entry.gamesWon}
+                      </Text>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Text variant="body" className="font-medium">
+                        {entry.averageScore}
+                      </Text>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Text variant="small" color="secondary">
+                        {new Date(entry.lastWonAt).toLocaleDateString()}
+                      </Text>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Empty State */}
-        {sortedData.length === 0 && (
+        {!loading && sortFilerData.length === 0 && (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🎯</div>
             <Heading level={3} className="mb-2 text-gray-600">
               No records found
             </Heading>
             <Text variant="body" color="secondary">
-              No games completed for {selectedDifficulty} difficulty yet.
+              No games completed for {selectedDifficulty === 'all' ? 'any' : selectedDifficulty} difficulty yet.
             </Text>
           </div>
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useGame } from '../../hooks/useGame';
 import { useGameActions } from '../../hooks/useGameActions';
 import GameBoard from '../../components/GameBoard/GameBoard';
@@ -147,6 +147,7 @@ const GameCompletionModal: React.FC<GameCompletionModalProps> = ({
 
 const GameScreen: React.FC = () => {
   const navigate = useNavigate();
+  const params = useParams<{ gameId: string }>();
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const {
@@ -171,7 +172,16 @@ const GameScreen: React.FC = () => {
 
   const {
     startGame,
+    loadGame,
   } = useGameContext();
+
+  // Load game when component mounts or gameId changes
+  useEffect(() => {
+    const gameIdFromParams = params.gameId;
+    if (gameIdFromParams) {
+      loadGame(gameIdFromParams);
+    }
+  }, [params.gameId, loadGame]);
 
   // Show completion modal when game ends
   useEffect(() => {

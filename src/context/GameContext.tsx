@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { GAME_COLORS } from '../constants'
-import type { GameState, GameConfig, Color, Guess, Difficulty, GameStatus } from '../types';
-import { generateLocalGameId, generateSecretCode } from '../utils/gameUtils';
+import type { GameState, GameConfig, Color, Guess, Difficulty, GameStatus, CreateGameResponse } from '../types';
+import { ApiProvider } from '../utils/api';
 
 const DIFFICULTY_CONFIG: Record<Difficulty, { slots: number; maxAttempts: number; colors: Color[] }> = {
   easy: { slots: 4, maxAttempts: 10, colors: GAME_COLORS },
@@ -12,7 +12,10 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { slots: number; maxAttempts: number
 
 // Action types for game state management
 export type GameAction =
-  | { type: 'START_GAME'; payload: { gameId: string; difficulty: Difficulty; secretCode?: Color[] } }
+  | { type: 'START_GAME_REQUEST'; payload: { difficulty: Difficulty } }
+  | { type: 'START_GAME_SUCCESS'; payload: { gameId: string; difficulty: Difficulty; secretCode?: Color[] } }
+  | { type: 'START_GAME_ERROR'; payload: { error: string } }
+  | { type: 'LOAD_GAME_SUCCESS'; payload: { gameId: string; difficulty: Difficulty; guesses: Guess[]; status: GameStatus; attemptsRemaining: number, secretCode?: Color[] } }
   | { type: 'UPDATE_CURRENT_GUESS'; payload: { index: number; color: Color | null } }
   | { type: 'ADD_COLOR_TO_SLOT'; payload: { color: Color } }
   | { type: 'BACKSPACE_COLOR' }
@@ -32,7 +35,8 @@ export interface GameContextState extends GameState {
 export interface GameContextValue {
   state: GameContextState;
   dispatch: React.Dispatch<GameAction>;
-  startGame: (difficulty: Difficulty) => Promise<string>;
+  startGame: (difficulty: Difficulty) => Promise<CreateGameResponse>;
+  loadGame: (gameId: string) => Promise<void>;
 }
 
 // Initial state
@@ -56,13 +60,71 @@ const createInitialState = (): GameContextState => ({
 // Game state reducer
 function gameReducer(state: GameContextState, action: GameAction): GameContextState {
   switch (action.type) {
-    case 'START_GAME': {
+    case 'START_GAME_REQUEST': {
+      const { difficulty } = action.payload;
+      const config = {
+        difficulty,
+        slots: DIFFICULTY_CONFIG[difficulty].slots,
+        maxAttempts: DIFFICULTY_CONFIG[difficulty].maxAttempts,
+        colors: DIFFICULTY_CONFIG[difficulty].colors,
+      };
+
+      return {
+        ...state,
+        loading: true,
+        error: undefined,
+        config,
+        gameStatus: 'playing',
+        attemptsRemaining: config.maxAttempts,
+        currentSlotIndex: 0,
+        canSubmit: false,
+        currentGuess: new Array(config.slots).fill(null),
+        guesses: [],
+      };
+    }
+
+    case 'START_GAME_SUCCESS': {
       const { gameId, secretCode } = action.payload;
       return {
         ...state,
         loading: false,
         gameId,
         secretCode: secretCode || [], // Use local secret code if provided, empty array for API mode
+      };
+    }
+
+    case 'LOAD_GAME_SUCCESS': {
+      const { gameId, difficulty, guesses, status, attemptsRemaining, secretCode } = action.payload;
+      console.log(guesses);
+      const config = {
+        difficulty,
+        slots: DIFFICULTY_CONFIG[difficulty].slots,
+        maxAttempts: DIFFICULTY_CONFIG[difficulty].maxAttempts,
+        colors: DIFFICULTY_CONFIG[difficulty].colors,
+      };
+
+      return {
+        ...state,
+        gameId,
+        guesses,
+        gameStatus: status,
+        attemptsRemaining,
+        config,
+        secretCode: secretCode || [],
+        currentGuess: new Array(config.slots).fill(null),
+        currentSlotIndex: 0,
+        canSubmit: false,
+        loading: false,
+        error: undefined,
+      };
+    }
+
+    case 'START_GAME_ERROR': {
+      const { error } = action.payload;
+      return {
+        ...state,
+        loading: false,
+        error,
       };
     }
 
@@ -276,23 +338,57 @@ export interface GameProviderProps {
 export function GameProvider({ children }: GameProviderProps) {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
 
-  const startGame = async (difficulty: Difficulty): Promise<string> => {
-    const gameId = generateLocalGameId()
-    dispatch({ 
-      type: 'START_GAME', 
-      payload: { 
-        gameId: gameId, 
-        difficulty: difficulty,
-        secretCode: generateSecretCode(difficulty)
-      } 
-    });
-    return gameId;
+  const startGame = async (difficulty: Difficulty): Promise<CreateGameResponse> => {
+    try {
+      dispatch({ type: 'START_GAME_REQUEST', payload: { difficulty } });
+      
+      const response = await ApiProvider.createGame(difficulty);
+      
+      dispatch({ 
+        type: 'START_GAME_SUCCESS', 
+        payload: { 
+          gameId: response.gameId, 
+          difficulty: response.difficulty,
+        } 
+      });
+      return response;
+    } catch (error) {
+      dispatch({ 
+        type: 'START_GAME_ERROR', 
+        payload: { 
+          error: error instanceof Error ? error.message : 'Failed to start game' 
+        } 
+      });
+      throw error;
+    }
   };
+
+  const loadGame = useCallback(async (gameId: string): Promise<void> => {
+    try {
+      const gameStatus = await ApiProvider.getGameStatus(gameId);
+      if (gameStatus) {
+        dispatch({
+          type: 'LOAD_GAME_SUCCESS',
+          payload: {
+            gameId: gameStatus.gameId,
+            difficulty: gameStatus.difficulty,
+            guesses: gameStatus.guesses,
+            status: gameStatus.status,
+            attemptsRemaining: gameStatus.attemptsRemaining,
+            secretCode: gameStatus?.secretCode,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load game:', error);
+    }
+  }, []);
 
   const value: GameContextValue = {
     state,
     dispatch,
     startGame,
+    loadGame,
   };
 
   return (
