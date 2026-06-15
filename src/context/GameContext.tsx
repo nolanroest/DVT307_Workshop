@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { GAME_COLORS } from '../constants'
-import type { GameState, GameConfig, Color, Guess, Difficulty, GameStatus, CreateGameResponse } from '../types';
+import type { GameState, GameConfig, Color, Guess, Difficulty, GameStatus, CreateGameResponse, FeedbackPayload } from '../types';
 import { ApiProvider } from '../utils/api';
+import { AppSyncEventsProvider, type IAppSyncEventsProvider } from '../utils/appSyncEvents';
+import type { EventsChannel } from 'aws-amplify/data';
 
 const DIFFICULTY_CONFIG: Record<Difficulty, { slots: number; maxAttempts: number; colors: Color[] }> = {
   easy: { slots: 4, maxAttempts: 10, colors: GAME_COLORS },
@@ -20,6 +22,8 @@ export type GameAction =
   | { type: 'ADD_COLOR_TO_SLOT'; payload: { color: Color } }
   | { type: 'BACKSPACE_COLOR' }
   | { type: 'SUBMIT_GUESS' }
+  | { type: 'SUBMIT_GUESS_APPSYNC'; payload: { guess: Color[] } }
+  | { type: 'RECEIVE_FEEDBACK'; payload: FeedbackPayload }
   | { type: 'RESET_GAME'; payload?: { difficulty: Difficulty} }
   | { type: 'SET_GAME_STATE'; payload: GameState };
 
@@ -37,6 +41,7 @@ export interface GameContextValue {
   dispatch: React.Dispatch<GameAction>;
   startGame: (difficulty: Difficulty) => Promise<CreateGameResponse>;
   loadGame: (gameId: string) => Promise<void>;
+  submitGuessAppSync: (guess: Color[]) => Promise<void>;
 }
 
 // Initial state
@@ -308,6 +313,49 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
       };
     }
 
+    case 'SUBMIT_GUESS_APPSYNC': {
+      // For AppSync mode, just clear current guess and wait for feedback
+      if (!state.gameId || state.gameStatus !== 'playing' || state.attemptsRemaining <= 0) {
+        return state;
+      }
+
+      const newCurrentGuess = new Array(state.config.slots).fill(null);
+      return {
+        ...state,
+        currentGuess: newCurrentGuess,
+        currentSlotIndex: 0,
+        canSubmit: false,
+      };
+    }
+
+    case 'RECEIVE_FEEDBACK': {
+      const { blackPegs, whitePegs, guess, gameStatus, guessNumber, secretCode } = action.payload;
+      
+      // Reconstruct the guess from the previous current guess (stored elsewhere)
+      // For now, we'll need to pass the guess in the payload or store it differently
+      const feedback = { correctPosition: blackPegs, correctColor: whitePegs };
+      
+      // Create a placeholder guess - in a real implementation, you'd store the submitted guess
+      const newGuess: Guess = {
+        colors: guess,
+        feedback,
+      };
+
+      // Calculate attempts remaining based on backend's guess number
+      const newAttemptsRemaining = state.config.maxAttempts - guessNumber;
+      
+      // Use the game status from the backend instead of calculating locally
+      const newGameStatus: GameStatus = gameStatus;
+
+      return {
+        ...state,
+        guesses: [...state.guesses, newGuess],
+        gameStatus: newGameStatus,
+        attemptsRemaining: newAttemptsRemaining,
+        secretCode,
+      };
+    }
+
     case 'RESET_GAME': {
       return createInitialState();
     }
@@ -337,6 +385,36 @@ export interface GameProviderProps {
 
 export function GameProvider({ children }: GameProviderProps) {
   const [state, dispatch] = useReducer(gameReducer, undefined, createInitialState);
+  const sub = useRef<ReturnType<EventsChannel['subscribe']> | null>(null);
+  const [appSyncProvider, setAppSyncProvider] = useState<IAppSyncEventsProvider>();
+
+  // Set up AppSync Events subscription when gameId changes
+  useEffect(() => {
+    if (!state.gameId) return;
+
+    let channel: EventsChannel;
+
+    const connectAndSubscribe = async (gameId: string) => {
+      const provider = await AppSyncEventsProvider.create(gameId);
+      setAppSyncProvider(provider);
+      const { _sub, _channel } = await provider.subscribeToFeedback(
+        state.gameId || '',
+        (feedback) => {
+          dispatch({ type: 'RECEIVE_FEEDBACK', payload: feedback });
+        }
+      );
+      sub.current = _sub;
+      channel = _channel;
+    }
+
+    connectAndSubscribe(state.gameId);
+
+    return () => {
+      sub.current?.unsubscribe();
+      sub.current = null;
+      return channel?.close();
+    };
+  }, [state.gameId]);
 
   const startGame = async (difficulty: Difficulty): Promise<CreateGameResponse> => {
     try {
@@ -384,11 +462,29 @@ export function GameProvider({ children }: GameProviderProps) {
     }
   }, []);
 
+  const submitGuessAppSync = async (guess: Color[]): Promise<void> => {
+    if (!state.gameId || !appSyncProvider) {
+      throw new Error('Cannot submit guess: No active game');
+    }
+
+    try {
+      // Dispatch local action to clear current guess
+      dispatch({ type: 'SUBMIT_GUESS_APPSYNC', payload: { guess } });
+      
+      // Publish to AppSync Events
+      await appSyncProvider.publishGuess(guess);
+    } catch (error) {
+      console.error('Failed to submit guess:', error);
+      throw error;
+    }
+  };
+
   const value: GameContextValue = {
     state,
     dispatch,
     startGame,
     loadGame,
+    submitGuessAppSync,
   };
 
   return (

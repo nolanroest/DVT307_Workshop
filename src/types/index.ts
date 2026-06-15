@@ -117,3 +117,8 @@ export interface GameListResponse {
   count: number;
   lastEvaluatedKey?: string;
 }
+
+// Leaderboard update payload - contains a single entry update
+export interface LeaderboardUpdatePayload extends LeaderboardEntry {
+  updatedAt?: string;
+}

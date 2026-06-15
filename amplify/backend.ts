@@ -8,6 +8,7 @@ import { DynamoDBConstruct } from './custom/dynamodb/resource';
 import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
 import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { RestApiConstruct } from './custom/rest-api/resource';
+import { AppSyncEventsConstruct } from './custom/appsync-events/resource';
 
 const environment = `${process.env.AWS_BRANCH}-${process.env.ENVIRONMENT}` || 'dev'
 
@@ -59,6 +60,17 @@ const restApiConstruct = new RestApiConstruct(sharedStack, `MastermindRestApi-${
   leaderboardTable: ddbConstruct.leaderboardTable
 });
 
+// Define Event API construct
+const eventApiConstruct = new AppSyncEventsConstruct(sharedStack, `MastermindEventApi-${environment}`, {
+  environment: environment,
+  userPool: backend.auth.resources.userPool,
+  validateGuess: backend.validateGuess.resources.lambda,
+});
+
+// Add AppSync Events endpoint & API Key to update-leaderboard function
+backend.updateLeaderboard.addEnvironment('APPSYNC_EVENTS_ENDPOINT', `https://${eventApiConstruct.eventApi.httpDns}/event`);
+backend.updateLeaderboard.addEnvironment('APPSYNC_EVENTS_API_KEY', eventApiConstruct.eventApi.apiKeys['Default'].attrApiKey);
+
 // add outputs to the configuration file
 backend.addOutput({
   custom: {
@@ -70,5 +82,9 @@ backend.addOutput({
         apiName: restApiConstruct.restApi.restApiName,
       },
     },
+    events: {
+      endpoint: `https://${eventApiConstruct.eventApi.httpDns}/event`,
+      region: backend.stack.region
+    }
   },
 });

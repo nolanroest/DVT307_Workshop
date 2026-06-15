@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Container } from '../../components/common';
 import { Heading, Text } from '../../components/common';
-import type { LeaderboardEntry, Difficulty } from '../../types';
+import type { LeaderboardEntry, Difficulty, LeaderboardUpdatePayload } from '../../types';
 import { ApiProvider } from '../../utils/api';
+import { AppSyncEventsProvider } from '../../utils/appSyncEvents';
+import type { EventsChannel } from 'aws-amplify/data';
 
 const LeaderboardScreen: React.FC = () => {
   const navigate = useNavigate();
+  const sub = useRef<ReturnType<EventsChannel['subscribe']> | null>(null);
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | 'all'>('all');
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardEntry[]>([]);
   const [sortFilerData, setSortFilterData] = useState<LeaderboardEntry[]>([]);
@@ -31,6 +34,51 @@ const LeaderboardScreen: React.FC = () => {
     const difficulty = selectedDifficulty === 'all' ? undefined : selectedDifficulty;
     fetchLeaderboard(difficulty);
   }, [selectedDifficulty]);
+
+  // Subscribe to real-time updates for each difficulty
+  useEffect(() => {
+
+    const setupSubscriptions = async () => {
+      try {
+        const { _sub } = await AppSyncEventsProvider.subscribeToLeaderboard((update: LeaderboardUpdatePayload) => {
+          console.log('Received leaderboard update:', update);
+
+          // Update leaderboard data with the new entry from the update
+          setLeaderboardData(prevData => {
+            const key = `${update.userId}-${update.difficulty}`;
+            
+            // Find existing entry index
+            const existingIndex = prevData.findIndex(
+              entry => `${entry.userId}-${entry.difficulty}` === key
+            );
+            
+            // Create the updated entry (excluding updatedAt if it exists)
+            const { updatedAt, ...updatedEntry } = update;
+            
+            if (existingIndex >= 0) {
+              // Update existing entry
+              const newData = [...prevData];
+              newData[existingIndex] = updatedEntry as LeaderboardEntry;
+              return newData;
+            } else {
+              // Add new entry
+              return [...prevData, updatedEntry as LeaderboardEntry];
+            }
+          });
+        });
+        sub.current = _sub;
+      } catch (error) {
+        console.error(`Error subscribing to leaderboard:`, error);
+      }
+    };
+
+    setupSubscriptions();
+
+    return () => {
+      sub.current?.unsubscribe();
+      sub.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const filteredData = selectedDifficulty === 'all'
@@ -141,11 +189,10 @@ const LeaderboardScreen: React.FC = () => {
               </thead>
               <tbody>
                 {sortFilerData.map((entry, index) => (
-                  <tr 
-                    key={`${entry.userId}-${entry.difficulty}`} 
-                    className={`border-b border-gray-100 hover:bg-gray-50 ${
-                      index < 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
-                    }`}
+                  <tr
+                    key={`${entry.userId}-${entry.difficulty}`}
+                    className={`border-b border-gray-100 hover:bg-gray-50 ${index < 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
+                      }`}
                   >
                     <td className="py-4 px-4">
                       <div className="flex items-center">

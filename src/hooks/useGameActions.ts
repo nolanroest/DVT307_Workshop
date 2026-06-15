@@ -7,7 +7,7 @@ import type { Color, Difficulty } from '../types';
  * This hook encapsulates all game state mutations and provides a clean API for components
  */
 export function useGameActions() {
-  const { state, dispatch } = useGameContext(); 
+  const { state, dispatch, submitGuessAppSync } = useGameContext(); 
   /**
    * Updates a specific position in the current guess
    * @param index - The position index to update (0-based)
@@ -58,9 +58,19 @@ export function useGameActions() {
    * Uses AppSync Events if API is enabled, otherwise local evaluation
    */
   const submitGuess = useCallback(async () => {
-    
-    dispatch({ type: 'SUBMIT_GUESS' });
-  }, [dispatch, state.gameId]);
+    if (state.gameId) {
+      // Use AppSync Events for API mode
+      const completeGuess = state.currentGuess.filter(c => c !== null) as Color[];
+      try {
+        await submitGuessAppSync(completeGuess);
+      } catch (error) {
+        console.error('Failed to submit guess via AppSync:', error);
+      }
+    } else {
+      // Use local evaluation for local mode
+      dispatch({ type: 'SUBMIT_GUESS' });
+    }
+  }, [dispatch, submitGuessAppSync, state.gameId, state.currentGuess]);
 
   /**
    * Adds a color to the current slot and automatically submits if the guess is complete

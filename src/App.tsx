@@ -18,6 +18,10 @@ Amplify.configure({
   API: {
     ...amplifyConfig.API,
     REST: outputs.custom.API,
+    Events: {
+      ...outputs.custom.events,
+      defaultAuthMode: 'userPool'
+    }
   },
 });
 
